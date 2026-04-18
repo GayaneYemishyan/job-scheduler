@@ -1,2 +1,12 @@
 .venv
 .idea
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+core/__pycache__/
+
+# OS generated files
+.DS_Store
+Thumbs.db
