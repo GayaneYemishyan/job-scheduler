@@ -1,6 +1,6 @@
 # test_heap.py
-from job import Job
-from min_heap import MinHeap
+from core.models import Job
+from core.heap import MinHeap
 
 heap = MinHeap()
 
