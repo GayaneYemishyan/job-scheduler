@@ -1,6 +1,5 @@
 # core/hash_map.py
 
-
 class HashMap:
 
     _TOMBSTONE = object()  # unique sentinel for deleted slots
