@@ -216,3 +216,34 @@ class HeapMap:
 
     def __repr__(self):
         return f"HeapMap(size={self.size()}, top={self.peek() if not self.is_empty() else None})"
+    
+
+
+
+
+
+    def refresh_priorities(self) -> None:
+        """
+        Called periodically by the scheduler (e.g. every 60 seconds).
+        Updates every task's wait_time and rebuilds the heap so
+        long-waiting tasks bubble up automatically.
+
+        O(n log n) — but called infrequently, so acceptable.
+        """
+        # Step 1: update wait_time on every task in the map
+        for slot in self._heap._data:
+            slot.update_wait_time()
+
+        # Step 2: rebuild heap from scratch so new effective_priorities
+        # are reflected in the correct order
+        self._rebuild_heap()
+
+    def _rebuild_heap(self) -> None:
+        """
+        Heapify the entire array in O(n) using Floyd's algorithm.
+        Start from the last non-leaf node and heapify_down each one.
+        """
+        n = self._heap.size()
+        # last non-leaf is at index (n // 2 - 1)
+        for i in range(n // 2 - 1, -1, -1):
+            self._heap._heapify_down(i)
