@@ -247,3 +247,5 @@ class HeapMap:
         # last non-leaf is at index (n // 2 - 1)
         for i in range(n // 2 - 1, -1, -1):
             self._heap._heapify_down(i)
+
+            
