@@ -5,7 +5,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-core/__pycache__/
+*/__pycache__/
 
 # OS generated files
 .DS_Store
