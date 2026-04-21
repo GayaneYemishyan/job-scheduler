@@ -36,7 +36,8 @@ class Task:
         self.task_id = task_id
         self.name = name
 
-        # --- Priority ---
+        # --- Priority ---]
+        self.base_priority = priority
         self.priority = priority  # used directly by the heap
         self.priority_level = priority_level  # label for display
 
@@ -129,7 +130,8 @@ class Task:
     def __repr__(self):
         return (
             f"Task(id={self.task_id!r}, name={self.name!r}, "
-            f"priority={self.priority}, status={self.status.value}, "
+            f"priority={self.priority}, base={self.base_priority}, "
+            f"status={self.status.value}, "
             f"dept={self.department!r}, deadline={self.deadline.strftime('%Y-%m-%d')})"
         )
     
