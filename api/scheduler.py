@@ -5,7 +5,8 @@ from core.graph import DAG
 from core.history import TaskHistory
 from core.heap import HeapMap
 
-# Critical path boost added to tasks on the longest dependency chain
+# Critical path boost added to tasks on the longest dependency chain.
+# This is additive on top of base_priority.
 CRITICAL_PATH_BOOST = 3
 
 
@@ -28,7 +29,7 @@ class Scheduler:
         self.heap_map = HeapMap()
         self.history = TaskHistory(max_size=history_max_size)
 
-        # Tracks tasks currently extracted and being worked on
+        # Tracks tasks currently extracted and being worked on.
         # task_id -> Task
         self._in_progress: dict = {}
 
@@ -44,7 +45,7 @@ class Scheduler:
             1. Validate all declared dependencies exist in the DAG
             2. Add task to the DAG
             3. Wire dependency edges (raises ValueError on cycle)
-            4. Apply critical path boost if task sits on the longest chain
+            4. Recompute critical-path boosts across the whole graph
             5. If no unmet dependencies, mark READY and push onto heap
 
         Raises:
@@ -52,13 +53,11 @@ class Scheduler:
             ValueError — if adding this task would create a dependency cycle
             ValueError — if a task with this ID was already submitted
         """
-        # Guard: duplicate submission
         if task.task_id in self.dag.tasks:
             raise ValueError(
                 f"Task '{task.task_id}' has already been submitted."
             )
 
-        # Guard: all declared dependencies must already exist in the DAG
         for dep_id in task.dependencies:
             if dep_id not in self.dag.tasks:
                 raise ValueError(
@@ -66,18 +65,14 @@ class Scheduler:
                     f"Submit '{dep_id}' before '{task.task_id}'."
                 )
 
-        # Register in DAG (no edges yet)
         self.dag.add_task(task)
 
-        # Wire dependency edges — raises ValueError on cycle
         for dep_id in task.dependencies:
             self.dag.add_dependency(dep_id, task.task_id)
 
-        # Apply critical path boost across the whole graph
-        # (recalculated on every submit so boosts stay accurate)
+        # Recompute boosts from scratch now that the graph has changed.
         self._apply_critical_path_boosts()
 
-        # If this task is immediately ready, push to heap
         if self.dag.in_degree[task.task_id] == 0:
             task.mark_ready()
             self.heap_map.push(task)
@@ -109,8 +104,7 @@ class Scheduler:
         Mark a task as done, record it in history, and unlock
         any dependents whose dependencies are now all satisfied.
 
-        Returns the list of newly ready Task objects that were
-        pushed onto the heap as a result.
+        Returns the list of newly ready Task objects pushed onto the heap.
 
         Raises:
             KeyError    — task_id not found anywhere
@@ -126,14 +120,10 @@ class Scheduler:
 
         task = self._in_progress.pop(task_id)
 
-        # DAG marks done, decrements successors' in_degree,
-        # returns list of tasks whose in_degree just hit 0
         newly_ready = self.dag.mark_complete(task_id)
 
-        # Record in history log
         self.history.record(task)
 
-        # Push newly unblocked tasks onto the heap
         for ready_task in newly_ready:
             self.heap_map.push(ready_task)
 
@@ -152,8 +142,7 @@ class Scheduler:
             2. Task is in progress (IN_PROGRESS) — pull from _in_progress
             3. Task is pending (PENDING)         — update status in DAG only
 
-        Killed tasks are recorded in history but do NOT unlock dependents
-        (a cancelled task is not a completed one).
+        Killed tasks are recorded in history but do NOT unlock dependents.
 
         Raises:
             KeyError   — task_id not found anywhere
@@ -171,22 +160,16 @@ class Scheduler:
             )
 
         if task.status == Status.READY:
-            # Task is in the heap — use HeapMap's cancel mechanism
             self.heap_map.cancel_task(task_id)
-            # cancel_task already calls mark_cancelled() internally
-            # but we re-fetch from dag to get the same object
             task = self.dag.tasks[task_id]
 
         elif task.status == Status.IN_PROGRESS:
-            # Task was extracted — remove from in_progress tracker
             task = self._in_progress.pop(task_id)
             task.mark_cancelled()
 
         elif task.status == Status.PENDING:
-            # Task never entered the heap — just update status
             task.mark_cancelled()
 
-        # Record in history
         self.history.record(task)
         return task
 
@@ -197,7 +180,6 @@ class Scheduler:
     def get_status(self, task_id: str) -> Status:
         """
         Return the current Status of any task.
-        Checks DAG (covers all states) and history (done/cancelled).
 
         Raises:
             KeyError — task_id not found
@@ -205,7 +187,6 @@ class Scheduler:
         if task_id in self.dag.tasks:
             return self.dag.tasks[task_id].status
 
-        # Also check history for tasks that completed before DAG was queried
         if self.history.contains(task_id):
             return self.history.get(task_id).status
 
@@ -215,10 +196,11 @@ class Scheduler:
         """
         Change a task's priority at any point in its lifecycle.
 
-        - If READY (in heap): HeapMap rebalances immediately → O(log n)
-        - If PENDING (not in heap yet): updates the model only,
-          so when it enters the heap it starts with the new priority
-        - If IN_PROGRESS: updates model (no heap rebalancing needed)
+        Updates base_priority so subsequent critical-path recomputations
+        start from the new caller-supplied value rather than the old one.
+
+        - READY (in heap)    → HeapMap rebalances immediately, O(log n)
+        - PENDING/IN_PROGRESS → model update only; heap rebalance on entry
 
         Raises:
             KeyError — task_id not found
@@ -228,12 +210,14 @@ class Scheduler:
 
         task = self.dag.tasks[task_id]
 
+        # Keep base_priority in sync so future boost recomputations are
+        # anchored to what the caller actually requested.
+        task.base_priority = new_priority
+
         if task.status == Status.READY:
-            # Task is in the heap — update and rebalance
             self.heap_map.update_priority(task_id, new_priority)
 
         elif task.status in (Status.PENDING, Status.IN_PROGRESS):
-            # Not in heap — just update the model
             task.priority = new_priority
 
         else:
@@ -245,7 +229,7 @@ class Scheduler:
         """
         Return all READY tasks sorted by effective priority, highest first.
         Does NOT consume the queue — safe to call at any time.
-        Time complexity: O(n log n)
+        O(n log n).
         """
         tasks = list(self.heap_map._heap._data)
         return sorted(
@@ -264,65 +248,75 @@ class Scheduler:
 
     def refresh_wait_times(self) -> None:
         """
-        Update wait_times for all queued tasks and rebuild the heap
-        so long-waiting low-priority tasks bubble up naturally.
-
-        Call this periodically (e.g. every 60 seconds in a real system).
+        Update wait_times for all queued tasks and rebuild the heap so
+        long-waiting low-priority tasks bubble up naturally.
         O(n log n).
         """
         self.heap_map.refresh_priorities()
 
     # ------------------------------------------------------------------
-    # Internal: critical path boost
+    # Internal: critical path boost — clean-slate recompute
     # ------------------------------------------------------------------
 
     def _apply_critical_path_boosts(self) -> None:
         """
-        Recalculate the critical path and give tasks on it a priority boost.
+        Recompute which tasks sit on the critical path and apply a
+        CRITICAL_PATH_BOOST on top of each task's base_priority.
 
-        Only runs if the DAG has at least one dependency edge — no point
-        computing the critical path for a flat list of independent tasks.
+        Design: clean-slate on every call
+        ---------------------------------
+        Every call starts by resetting ALL tasks to their base_priority,
+        then adds the boost only to tasks currently on the critical path.
 
-        The boost is additive and applied once. To avoid double-boosting
-        on repeated submissions, we store which tasks were already boosted.
+        This is correct across all submission orderings:
+          - A task that becomes critical after a later high-duration task
+            is added will now receive its boost.
+          - A task that was previously critical but is no longer (because
+            a new shorter path made the old critical path irrelevant) will
+            have its boost correctly revoked.
+
+        The old approach stored a `_boosted_tasks` set and only boosted
+        each task once, which meant tasks could be permanently over-boosted
+        or permanently under-boosted depending on submission order.
+
+        Complexity: O(V + E) for critical_path() + O(V) for the reset pass
+        + O(log n) per READY task whose priority changes in the heap.
         """
-        total_edges = sum(
-            len(v) for v in self.dag.successors.values()
-        )
+        total_edges = sum(len(v) for v in self.dag.successors.values())
         if total_edges == 0:
+            # No dependencies — flat task list, critical path is meaningless.
             return
 
         try:
             critical_task_ids, _ = self.dag.critical_path()
         except ValueError:
-            # Cycle detected — critical path cannot be computed.
-            # The cycle will be caught properly by add_dependency.
+            # Cycle detected — will be caught properly by add_dependency.
             return
 
-        if not hasattr(self, "_boosted_tasks"):
-            self._boosted_tasks = set()
+        critical_set = set(critical_task_ids)
 
-        for task_id in critical_task_ids:
-            if task_id not in self._boosted_tasks:
-                task = self.dag.tasks[task_id]
-                task.priority += CRITICAL_PATH_BOOST
-                self._boosted_tasks.add(task_id)
-
-                # If already in heap, rebalance to reflect new priority
+        # Pass 1: reset every task back to base_priority.
+        for task in self.dag.all_tasks():
+            desired = task.base_priority
+            if task.priority != desired:
+                task.priority = desired
                 if task.status == Status.READY:
-                    self.heap_map.update_priority(
-                        task_id, task.priority
-                    )
+                    self.heap_map.update_priority(task.task_id, desired)
+
+        # Pass 2: apply boost to tasks currently on the critical path.
+        for task_id in critical_set:
+            task = self.dag.tasks[task_id]
+            boosted = task.base_priority + CRITICAL_PATH_BOOST
+            if task.priority != boosted:
+                task.priority = boosted
+                if task.status == Status.READY:
+                    self.heap_map.update_priority(task_id, boosted)
 
     # ------------------------------------------------------------------
     # Display
     # ------------------------------------------------------------------
 
     def status_report(self) -> str:
-        """
-        Human-readable overview of the scheduler's current state.
-        Useful for the demo and presentation.
-        """
         pending = [
             t for t in self.dag.all_tasks()
             if t.status == Status.PENDING
