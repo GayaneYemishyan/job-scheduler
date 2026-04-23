@@ -1,17 +1,13 @@
 # core/heap.py
 
-import time
 from core.models import Task, Status
 from datetime import datetime
-
 from core.hash_map import HashMap
 
 
 class MinHeap:
     def __init__(self):
-        self._data = []  # list of Task objects
-
-    # ── helpers ──────────────────────────────────────────────
+        self._data = []
 
     def _parent(self, i):
         return (i - 1) // 2
@@ -23,17 +19,11 @@ class MinHeap:
         return 2 * i + 2
 
     def _swap(self, i, j):
-        # swap positions AND update each task's heap_index
         self._data[i].heap_index = j
         self._data[j].heap_index = i
         self._data[i], self._data[j] = self._data[j], self._data[i]
 
     def _compare(self, i, j):
-        """
-        Returns True if task at i should be above task at j.
-        Uses effective_priority() so anti-starvation is baked in.
-        Higher effective_priority = closer to root.
-        """
         return self._data[i].effective_priority() > self._data[j].effective_priority()
 
     def size(self):
@@ -43,62 +33,44 @@ class MinHeap:
         return len(self._data) == 0
 
     def peek(self):
-        """Return highest-priority task without removing. O(1)."""
         if self.is_empty():
             raise IndexError("Heap is empty")
         return self._data[0]
 
-    # ── core operations ───────────────────────────────────────
-
     def insert(self, task: Task):
-        """Add a task to the heap. O(log n)."""
         task.heap_index = len(self._data)
         self._data.append(task)
         self._heapify_up(len(self._data) - 1)
 
     def extract_max(self):
-        """
-        Remove and return the highest effective-priority task. O(log n).
-        (We call it extract_max because higher priority number = more urgent)
-        """
         if self.is_empty():
             raise IndexError("Heap is empty")
-
         self._swap(0, len(self._data) - 1)
         top_task = self._data.pop()
         top_task.heap_index = None
-
         if not self.is_empty():
             self._heapify_down(0)
-
         return top_task
 
-    # ── heapify ───────────────────────────────────────────────
-
     def _heapify_up(self, i):
-        """Bubble element at i upward until heap property restored."""
         while i > 0:
             parent = self._parent(i)
-            if self._compare(i, parent):  # i is more urgent than parent
+            if self._compare(i, parent):
                 self._swap(i, parent)
                 i = parent
             else:
                 break
 
     def _heapify_down(self, i):
-        """Push element at i downward until heap property restored."""
         n = len(self._data)
-
         while True:
             largest = i
             left = self._left(i)
             right = self._right(i)
-
             if left < n and self._compare(left, largest):
                 largest = left
             if right < n and self._compare(right, largest):
                 largest = right
-
             if largest != i:
                 self._swap(i, largest)
                 i = largest
@@ -107,106 +79,74 @@ class MinHeap:
 
     def __repr__(self):
         return f"MinHeap([{', '.join(str(t) for t in self._data)}])"
-    
-
-    from core.hash_map import HashMap
-
-
-
-
-
-
-
-
-
-
-
 
 
 class HeapMap:
-    """
-    The Heap-Map hybrid.
-    All scheduler interactions go through this class, never directly
-    to MinHeap or HashMap separately. This guarantees they stay in sync.
-    """
-
     def __init__(self):
         self._heap = MinHeap()
         self._map = HashMap()
 
-    # ── insert ────────────────────────────────────────────────
-
     def push(self, task: Task) -> None:
-        """Insert a task into both structures. O(log n)."""
         if self._map.has(task.task_id):
             raise ValueError(f"Task '{task.task_id}' already exists")
-        self._heap.insert(task)          # heap sets task.heap_index
+        self._heap.insert(task)
         self._map.put(task.task_id, task)
 
-    # ── extract ───────────────────────────────────────────────
-
     def pop(self) -> Task:
-        """Remove and return highest-priority task. O(log n)."""
         task = self._heap.extract_max()
         self._map.delete(task.task_id)
         return task
 
     def peek(self) -> Task:
-        """See highest-priority task without removing. O(1)."""
         return self._heap.peek()
 
-    # ── update_priority ───────────────────────────────────────
-
     def update_priority(self, task_id: str, new_priority: int) -> None:
-        """
-        Change a task's priority and fix its position in the heap.
-        This is the core hard operation. O(log n).
-
-        Steps:
-        1. Find the task via HashMap          → O(1)
-        2. Read its heap_index                → O(1)
-        3. Update its priority value          → O(1)
-        4. Rebalance from that index          → O(log n)
-        """
         task = self._map.get(task_id)
         if task is None:
             raise KeyError(f"Task '{task_id}' not found")
-
         old_priority = task.priority
-        task.priority = new_priority        # mutate in place — heap sees it immediately
-                                            # because the heap stores the same object
-
+        task.priority = new_priority
         idx = task.heap_index
-
         if new_priority > old_priority:
-            # task became MORE urgent → might need to go up
             self._heap._heapify_up(idx)
         elif new_priority < old_priority:
-            # task became LESS urgent → might need to go down
             self._heap._heapify_down(idx)
-        # if equal, nothing to do
-
-    # ── admin controls ────────────────────────────────────────
 
     def get_task(self, task_id: str) -> Task:
-        """Retrieve any task by ID instantly. O(1)."""
         return self._map.get(task_id)
 
     def cancel_task(self, task_id: str) -> Task:
-        """
-        Kill a task mid-queue. O(log n).
-
-        Strategy: boost it to priority 999 (highest possible),
-        it bubbles to the root, then extract it cleanly.
-        """
         task = self._map.get(task_id)
         if task is None:
             raise KeyError(f"Task '{task_id}' not found")
 
-        self.update_priority(task_id, new_priority=999)  # float to root
-        removed = self.pop()                              # extract from root
-        removed.mark_cancelled()
-        return removed
+        # Direct in-place removal — no magic sentinel needed.
+        #
+        # Old approach: boost to 999, then pop().
+        # Problem: any task with priority > 999 (e.g. after a critical-path
+        # boost takes base_priority=997 to 1000) would not float to the root,
+        # so pop() would silently remove the wrong task.
+        #
+        # Correct approach:
+        #   1. Swap the target with the last element.
+        #   2. Pop the last slot (the target is now safely gone).
+        #   3. Rebalance the node that landed at the vacated index — it may
+        #      need to go up *or* down depending on its priority relative
+        #      to its new neighbours.
+        idx = task.heap_index
+        last_idx = self._heap.size() - 1
+
+        self._heap._swap(idx, last_idx)        # move target to the tail
+        self._heap._data.pop()                 # remove it
+        task.heap_index = None
+        self._map.delete(task_id)
+
+        if idx < self._heap.size():            # only rebalance if not last
+            self._heap._heapify_up(idx)        # handles case: replacement > parent
+            self._heap._heapify_down(idx)      # handles case: replacement < child
+
+        task.mark_cancelled()
+        return task
 
     def size(self) -> int:
         return self._heap.size()
@@ -214,38 +154,24 @@ class HeapMap:
     def is_empty(self) -> bool:
         return self._heap.is_empty()
 
-    def __repr__(self):
-        return f"HeapMap(size={self.size()}, top={self.peek() if not self.is_empty() else None})"
-    
-
-
-
-
-
     def refresh_priorities(self) -> None:
-        """
-        Called periodically by the scheduler (e.g. every 60 seconds).
-        Updates every task's wait_time and rebuilds the heap so
-        long-waiting tasks bubble up automatically.
-
-        O(n log n) — but called infrequently, so acceptable.
-        """
-        # Step 1: update wait_time on every task in the map
         for slot in self._heap._data:
             slot.update_wait_time()
-
-        # Step 2: rebuild heap from scratch so new effective_priorities
-        # are reflected in the correct order
         self._rebuild_heap()
 
     def _rebuild_heap(self) -> None:
-        """
-        Heapify the entire array in O(n) using Floyd's algorithm.
-        Start from the last non-leaf node and heapify_down each one.
-        """
+        # Floyd's algorithm: heapify_down every non-leaf, bottom-up.
         n = self._heap.size()
-        # last non-leaf is at index (n // 2 - 1)
         for i in range(n // 2 - 1, -1, -1):
             self._heap._heapify_down(i)
+        # _heapify_down only updates heap_index via _swap when it actually
+        # moves a node.  Nodes that were already in a valid position are
+        # never swapped, so their heap_index fields stay at whatever value
+        # they had before the loop (which may be stale after a shuffle or
+        # a manual corruption).  A single O(n) pass after the Floyd loop
+        # guarantees every node's heap_index matches its actual position.
+        for idx, task in enumerate(self._heap._data):
+            task.heap_index = idx
 
-            
+    def __repr__(self):
+        return f"HeapMap(size={self.size()}, top={self.peek() if not self.is_empty() else None})"
