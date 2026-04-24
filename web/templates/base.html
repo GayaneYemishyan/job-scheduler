@@ -13,19 +13,21 @@
   <body>
 
     <header class="topbar">
-      <a class="brand" href="{{ url_for('home') }}">
-        <span class="brand-icon">FD</span>
-        FlowDesk
-      </a>
-      <nav class="topbar-nav">
-        {% if session.get('user_id') %}
-          <a href="{{ url_for('dashboard') }}">Dashboard</a>
-          <a href="{{ url_for('logout') }}">Sign out</a>
-        {% else %}
-          <a href="{{ url_for('signin') }}">Sign in</a>
-          <a href="{{ url_for('signup') }}" style="color:var(--teal)">Sign up</a>
-        {% endif %}
-      </nav>
+      <div class="topbar-inner">
+        <a class="brand" href="{{ url_for('home') }}">
+          <span class="brand-icon">FD</span>
+          FlowDesk
+        </a>
+        <nav class="topbar-nav">
+          {% if session.get('user_id') %}
+            <a class="nav-dashboard" href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a class="nav-signout" href="{{ url_for('logout') }}">Sign out</a>
+          {% else %}
+            <a class="nav-signin" href="{{ url_for('signin') }}">Sign in</a>
+            <a class="nav-signup" href="{{ url_for('signup') }}">Sign up</a>
+          {% endif %}
+        </nav>
+      </div>
     </header>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -41,7 +43,9 @@
       {% endif %}
     {% endwith %}
 
-    {% block content %}{% endblock %}
+    <main class="site-shell">
+      {% block content %}{% endblock %}
+    </main>
 
   </body>
 </html>

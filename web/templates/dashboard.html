@@ -1,19 +1,18 @@
 {% extends "base.html" %}
 {% block title %}FlowDesk — Dashboard{% endblock %}
 {% block head %}
-<script>
-  window.schedulerNodes = {{ nodes | tojson }};
-  window.schedulerEdges = {{ edges | tojson }};
-  window.criticalPath   = {{ critical_path | tojson }};
+<script id="scheduler-data" type="application/json">
+  {{ {
+    "nodes": nodes,
+    "edges": edges,
+    "criticalPath": critical_path
+  } | tojson }}
 </script>
 <script defer src="{{ url_for('static', filename='dashboard.js') }}"></script>
 {% endblock %}
 {% block content %}
-
-<main>
-
   <!-- ── Header ── -->
-  <div class="dashboard-header" style="margin-bottom:1.5rem">
+  <div class="dashboard-header">
     <div>
       <p class="eyebrow">Scheduler Console</p>
       <h1>{{ user.full_name }}</h1>
@@ -21,16 +20,16 @@
     </div>
     <div class="actions-inline">
       <form method="post" action="{{ url_for('start_next') }}" style="margin:0">
-        <button class="btn btn-primary" type="submit">▶ Start Next Task</button>
+        <button class="btn btn-primary" type="submit">▶ Start Next</button>
       </form>
       <form method="post" action="{{ url_for('rebalance') }}" style="margin:0">
-        <button class="btn btn-outline" type="submit">⟳ Re-balance Queue</button>
+        <button class="btn btn-outline" type="submit">⟳ Re-balance</button>
       </form>
     </div>
   </div>
 
   <!-- ── Stats ── -->
-  <div class="stats-row" style="margin-bottom:1.25rem">
+  <div class="stats-row" style="margin-bottom:clamp(0.75rem,2vw,1.25rem)">
     <div class="stat-card">
       <p class="stat-label">Tasks in DAG</p>
       <p class="stat-value">{{ tasks|length }}</p>
@@ -52,7 +51,7 @@
   </div>
 
   <!-- ── Dependency Graph ── -->
-  <div class="panel" style="margin-bottom:1.25rem">
+  <div class="panel" style="margin-bottom:clamp(0.75rem,2vw,1.25rem)">
     <p class="section-title">Dependency Graph</p>
     <div id="graph"></div>
     <div class="graph-footer">
@@ -78,7 +77,7 @@
   </div>
 
   <!-- ── Create + Queue/In-Progress ── -->
-  <div class="page-grid" style="margin-bottom:1.25rem">
+  <div class="page-grid" style="margin-bottom:clamp(0.75rem,2vw,1.25rem)">
 
     <!-- Create task -->
     <div class="panel">
@@ -90,17 +89,35 @@
           <input name="name" placeholder="e.g. Build API endpoint" required />
         </div>
 
-        <div class="page-grid" style="gap:0.75rem">
+        <div class="form-row-2">
           <div class="form-group">
             <label class="form-label">Department</label>
-            <select name="department">
+            <select name="department" onchange="this.value==='Other'?document.getElementById('custom-dept-group').style.display='block':document.getElementById('custom-dept-group').style.display='none'">
+              {% set existing_depts = [] %}
+              {% for t in tasks %}
+                {% if t.department not in existing_depts and t.department not in ['Engineering', 'Design', 'Marketing', 'Operations', 'Finance'] %}
+                  {% if existing_depts.append(t.department) %}{% endif %}
+                {% endif %}
+              {% endfor %}
+              
               <option>Engineering</option>
               <option>Design</option>
               <option>Marketing</option>
               <option>Operations</option>
               <option>Finance</option>
+              
+              {% for dept in existing_depts %}
+                <option>{{ dept }}</option>
+              {% endfor %}
+              <option value="Other">+ Other...</option>
             </select>
           </div>
+          <div class="form-group" id="custom-dept-group" style="display:none">
+            <label class="form-label">Custom Department</label>
+            <input name="custom_department" placeholder="Enter department name" />
+          </div>
+        </div>
+        <div class="form-row-2">
           <div class="form-group">
             <label class="form-label">Priority</label>
             <select name="priority">
@@ -112,7 +129,7 @@
           </div>
         </div>
 
-        <div class="page-grid" style="gap:0.75rem">
+        <div class="form-row-2">
           <div class="form-group">
             <label class="form-label">Duration (h)</label>
             <input type="number" step="0.5" min="0.5" name="estimated_duration" value="1.0" required />
@@ -127,7 +144,9 @@
           <label class="form-label">Dependencies</label>
           <select name="dependencies" multiple>
             {% for task in tasks %}
-            <option value="{{ task.task_id }}">{{ task.task_id }} — {{ task.name }}</option>
+              {% if task.status.value not in ['cancelled', 'pending'] %}
+                <option value="{{ task.task_id }}">{{ task.task_id }} — {{ task.name }}</option>
+              {% endif %}
             {% endfor %}
           </select>
         </div>
@@ -137,7 +156,7 @@
     </div>
 
     <!-- Queue + In progress -->
-    <div style="display:grid;gap:1.25rem;align-content:start">
+    <div style="display:grid;gap:clamp(0.75rem,2vw,1.25rem);align-content:start">
 
       <div class="panel">
         <p class="section-title">Up Next</p>
@@ -147,7 +166,7 @@
               <li class="task-list-item">
                 <span class="task-list-item-id">{{ task.task_id }}</span>
                 <span class="task-list-item-name">{{ task.name }}</span>
-                <span class="task-list-item-meta">{{ task.department }} · P{{ task.priority }}</span>
+                <span class="task-list-item-meta">P{{ task.priority }}</span>
               </li>
             {% endfor %}
           </ul>
@@ -165,7 +184,7 @@
                 <span class="task-list-item-id">{{ task.task_id }}</span>
                 <span class="task-list-item-name">{{ task.name }}</span>
                 <form method="post" action="{{ url_for('complete_task', task_id=task.task_id) }}" style="flex-shrink:0;margin:0">
-                  <button class="btn btn-primary btn-sm" type="submit">✓ Complete</button>
+                  <button class="btn btn-primary btn-sm" type="submit">✓ Done</button>
                 </form>
               </li>
             {% endfor %}
@@ -184,42 +203,44 @@
     <div class="panel">
       <p class="section-title">All Tasks</p>
       {% if tasks %}
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Priority</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for task in tasks %}
-          <tr>
-            <td>{{ task.task_id }}</td>
-            <td style="color:var(--ink-2)">{{ task.name }}</td>
-            <td>
-              {% if task.status.value in ['done', 'cancelled'] %}
-                <span class="badge badge-{{ task.status.value }}">{{ task.status.value }}</span>
-              {% elif task.is_overdue() %}
-                <span class="badge badge-delayed">delayed</span>
-              {% else %}
-                <span class="badge badge-{{ task.status.value }}">{{ task.status.value | replace('_',' ') }}</span>
-              {% endif %}
-            </td>
-            <td style="color:var(--teal);font-weight:700;font-family:var(--font-mono)">{{ task.priority }}</td>
-            <td>
-              {% if task.status.value not in ['done', 'cancelled'] %}
-              <form method="post" action="{{ url_for('cancel_task', task_id=task.task_id) }}" style="margin:0">
-                <button class="btn btn-danger btn-sm" type="submit">Cancel</button>
-              </form>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Status</th>
+              <th>P</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for task in tasks %}
+            <tr>
+              <td>{{ task.task_id }}</td>
+              <td style="color:var(--ink-2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ task.name }}</td>
+              <td>
+                {% if task.status.value in ['done', 'cancelled'] %}
+                  <span class="badge badge-{{ task.status.value }}">{{ task.status.value }}</span>
+                {% elif task.is_overdue() %}
+                  <span class="badge badge-delayed">delayed</span>
+                {% else %}
+                  <span class="badge badge-{{ task.status.value }}">{{ task.status.value | replace('_',' ') }}</span>
+                {% endif %}
+              </td>
+              <td style="color:var(--teal);font-weight:700;font-family:var(--font-mono)">{{ task.priority }}</td>
+              <td>
+                {% if task.status.value not in ['done', 'cancelled'] %}
+                <form method="post" action="{{ url_for('cancel_task', task_id=task.task_id) }}" style="margin:0">
+                  <button class="btn btn-danger btn-sm" type="submit">✕</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
       {% else %}
         <p class="empty">No tasks yet. Create one above.</p>
       {% endif %}
@@ -248,7 +269,5 @@
     </div>
 
   </div>
-
-</main>
 
 {% endblock %}

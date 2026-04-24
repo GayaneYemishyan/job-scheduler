@@ -163,6 +163,24 @@ class Task:
         """
         return self.priority + starvation_weight * self.wait_time
 
+    def update(self, **kwargs) -> None:
+        """Update task properties."""
+        if "name" in kwargs:
+            self.name = kwargs["name"]
+        if "priority" in kwargs:
+            self.priority = int(kwargs["priority"])
+            self.base_priority = self.priority
+        if "deadline" in kwargs:
+            self.deadline = kwargs["deadline"]
+        if "department" in kwargs:
+            self.department = kwargs["department"]
+        if "assigned_to" in kwargs:
+            self.assigned_to = kwargs["assigned_to"]
+        if "estimated_duration" in kwargs:
+            self.estimated_duration = float(kwargs["estimated_duration"])
+        if "description" in kwargs:
+            self.description = kwargs["description"]
+
     # ------------------------------------------------------------------
     # Display
     # ------------------------------------------------------------------

@@ -134,6 +134,17 @@ def create_app() -> Flask:
                     except Exception:
                         continue
 
+            elif etype == "update":
+                task_id = data.get("task_id")
+                payload = data.get("updates", {})
+                if task_id and task_id in scheduler.dag.tasks:
+                    if "deadline" in payload:
+                        payload["deadline"] = datetime.fromisoformat(payload["deadline"])
+                    try:
+                        scheduler.update_task(task_id, **payload)
+                    except Exception:
+                        continue
+
             elif etype == "rebalance":
                 scheduler.refresh_wait_times()
 
@@ -247,7 +258,14 @@ def create_app() -> Flask:
                 "title": f"{task.name} | {task.department} | p{task.priority} | {status_label(task)}",
                 "group": status_label(task),
             }
-            for task in tasks
+            for task in tasks if status_label(task) not in ("cancelled", "pending")
+        ]
+
+        # Filter edges to only include those between non-cancelled/non-pending tasks
+        visible_task_ids = {n["id"] for n in nodes}
+        edges = [
+            {"from": u, "to": v} for u, v in edges 
+            if u in visible_task_ids and v in visible_task_ids
         ]
 
         critical_path, critical_duration = [], 0
@@ -279,7 +297,14 @@ def create_app() -> Flask:
     def create_task():
         scheduler, counter, _ = replay_scheduler(session["user_id"])
         name = request.form.get("name", "").strip()
-        department = request.form.get("department", "Operations")
+        department = request.form.get("department")
+        custom_dept = request.form.get("custom_department", "").strip()
+        
+        if department == "Other" and custom_dept:
+            department = custom_dept
+        elif not department:
+            department = "Operations"
+            
         priority = int(request.form.get("priority", 2))
         estimated_duration = float(request.form.get("estimated_duration", 1.0))
         deadline_raw = request.form.get("deadline")
@@ -363,6 +388,63 @@ def create_app() -> Flask:
         scheduler.refresh_wait_times()
         append_event(session["user_id"], "rebalance", {})
         flash("Queue re-balanced.", "success")
+        return redirect(url_for("dashboard"))
+
+    @app.get("/tasks/<task_id>/edit")
+    @login_required
+    def edit_task_page(task_id: str):
+        scheduler, _, _ = replay_scheduler(session["user_id"])
+        if task_id not in scheduler.dag.tasks:
+            flash(f"Task {task_id} not found.", "error")
+            return redirect(url_for("dashboard"))
+        
+        task = scheduler.dag.tasks[task_id]
+        if task.status in (Status.DONE, Status.CANCELLED):
+            flash(f"Cannot edit a {task.status.value} task.", "error")
+            return redirect(url_for("dashboard"))
+
+        return render_template("edit_task.html", task=task)
+
+    @app.post("/tasks/<task_id>/edit")
+    @login_required
+    def edit_task(task_id: str):
+        scheduler, _, _ = replay_scheduler(session["user_id"])
+        if task_id not in scheduler.dag.tasks:
+            flash(f"Task {task_id} not found.", "error")
+            return redirect(url_for("dashboard"))
+
+        name = request.form.get("name", "").strip()
+        department = request.form.get("department")
+        custom_dept = request.form.get("custom_department", "").strip()
+        if department == "Other" and custom_dept:
+            department = custom_dept
+        
+        priority = int(request.form.get("priority", 2))
+        estimated_duration = float(request.form.get("estimated_duration", 1.0))
+        deadline_raw = request.form.get("deadline")
+
+        try:
+            deadline = datetime.fromisoformat(deadline_raw)
+        except Exception:
+            flash("Invalid deadline date.", "error")
+            return redirect(url_for("edit_task_page", task_id=task_id))
+
+        updates = {
+            "name": name,
+            "department": department,
+            "priority": priority,
+            "estimated_duration": estimated_duration,
+            "deadline": deadline.isoformat()
+        }
+
+        try:
+            # Replay friendly update
+            scheduler.update_task(task_id, **{**updates, "deadline": deadline})
+            append_event(session["user_id"], "update", {"task_id": task_id, "updates": updates})
+            flash(f"Task {task_id} updated.", "success")
+        except Exception as exc:
+            flash(str(exc), "error")
+
         return redirect(url_for("dashboard"))
 
     return app

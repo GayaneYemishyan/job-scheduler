@@ -1,6 +1,14 @@
 (function renderSchedulerGraph() {
   var container = document.getElementById("graph");
-  if (!container || !window.schedulerNodes || !window.schedulerEdges) return;
+  var dataScript = document.getElementById("scheduler-data");
+  if (!container || !dataScript) return;
+
+  var payload;
+  try {
+    payload = JSON.parse(dataScript.textContent || "{}");
+  } catch (error) {
+    return;
+  }
 
   // ── Colour map matching CSS variables ──
   var COLORS = {
@@ -16,9 +24,9 @@
   var CRITICAL_COLOR = { fill: "#2a1a00", stroke: "#f5a623", text: "#f5a623" };
 
   // ── Build adjacency for layout ──
-  var nodes = window.schedulerNodes;
-  var edges = window.schedulerEdges;
-  var criticalPath = window.criticalPath || [];
+  var nodes = payload.nodes || [];
+  var edges = payload.edges || [];
+  var criticalPath = payload.criticalPath || [];
   var criticalSet  = new Set(criticalPath);
 
   if (!nodes.length) {
