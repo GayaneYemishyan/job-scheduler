@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
-# Ensure project-root imports work when this file is executed directly.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -39,7 +38,6 @@ def create_app() -> Flask:
             raise RuntimeError(
                 "Missing FIREBASE_API_KEY. Configure it to enable Firebase Auth."
             )
-
         url = (
             f"https://identitytoolkit.googleapis.com/v1/{endpoint}"
             f"?key={firebase_api_key}"
@@ -51,7 +49,6 @@ def create_app() -> Flask:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-
         try:
             with urllib_request.urlopen(req, timeout=15) as response:
                 return json.loads(response.read().decode("utf-8"))
@@ -67,43 +64,28 @@ def create_app() -> Flask:
     def firebase_sign_up(email: str, password: str, full_name: str) -> dict:
         data = firebase_request(
             "accounts:signUp",
-            {
-                "email": email,
-                "password": password,
-                "returnSecureToken": True,
-            },
+            {"email": email, "password": password, "returnSecureToken": True},
         )
-
         id_token = data.get("idToken")
         if id_token:
             firebase_request(
                 "accounts:update",
-                {
-                    "idToken": id_token,
-                    "displayName": full_name,
-                    "returnSecureToken": False,
-                },
+                {"idToken": id_token, "displayName": full_name, "returnSecureToken": False},
             )
-
         return data
 
     def firebase_sign_in(email: str, password: str) -> dict:
         return firebase_request(
             "accounts:signInWithPassword",
-            {
-                "email": email,
-                "password": password,
-                "returnSecureToken": True,
-            },
+            {"email": email, "password": password, "returnSecureToken": True},
         )
 
     def login_required(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             if "user_id" not in session:
-                return redirect(url_for("auth"))
+                return redirect(url_for("signin"))
             return fn(*args, **kwargs)
-
         return wrapper
 
     def replay_scheduler(user_id: str) -> tuple[Scheduler, int, str | None]:
@@ -160,11 +142,7 @@ def create_app() -> Flask:
     def append_event(user_id: str, event_type: str, data: dict) -> None:
         store.append_event(
             user_id,
-            {
-                "type": event_type,
-                "data": data,
-                "timestamp": datetime.utcnow().isoformat(),
-            },
+            {"type": event_type, "data": data, "timestamp": datetime.utcnow().isoformat()},
         )
 
     def status_label(task: Task) -> str:
@@ -174,67 +152,75 @@ def create_app() -> Flask:
             return "delayed"
         return task.status.value
 
+    # ── Routes ─────────────────────────────────────────────────────────
+
     @app.get("/")
     def home():
         return render_template("home.html", user_id=session.get("user_id"))
 
+    # Separate Sign In page
+    @app.get("/signin")
+    def signin():
+        if session.get("user_id"):
+            return redirect(url_for("dashboard"))
+        return render_template("signin.html")
+
+    # Separate Sign Up page
+    @app.get("/signup")
+    def signup():
+        if session.get("user_id"):
+            return redirect(url_for("dashboard"))
+        return render_template("signup.html")
+
+    # Single POST handler for both modes (forms still POST to /auth)
     @app.route("/auth", methods=["GET", "POST"])
     def auth():
-        if request.method == "POST":
-            if not firebase_auth_enabled():
-                flash(
-                    "Firebase Auth is not configured. Set FIREBASE_API_KEY first.",
-                    "error",
-                )
-                return redirect(url_for("auth"))
+        if request.method == "GET":
+            return redirect(url_for("signin"))
 
-            mode = request.form.get("mode", "signin")
-            email = request.form.get("email", "").strip().lower()
-            password = request.form.get("password", "")
+        if not firebase_auth_enabled():
+            flash("Firebase Auth is not configured. Set FIREBASE_API_KEY first.", "error")
+            return redirect(url_for("signin"))
 
-            if mode == "signup":
-                full_name = request.form.get("full_name", "").strip()
-                if len(full_name) < 2:
-                    flash("Please enter a valid full name.", "error")
-                    return redirect(url_for("auth"))
+        mode = request.form.get("mode", "signin")
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
 
-                try:
-                    signup_data = firebase_sign_up(
-                        email=email,
-                        password=password,
-                        full_name=full_name,
-                    )
-                    user = store.upsert_user_profile(
-                        user_id=signup_data["localId"],
-                        email=signup_data.get("email", email),
-                        full_name=full_name,
-                    )
-                    session["user_id"] = user["id"]
-                    session.permanent = True
-                    flash("Account created successfully.", "success")
-                    return redirect(url_for("dashboard"))
-                except (ValueError, RuntimeError) as exc:
-                    flash(str(exc), "error")
-                    return redirect(url_for("auth"))
-
+        if mode == "signup":
+            full_name = request.form.get("full_name", "").strip()
+            if len(full_name) < 2:
+                flash("Please enter a valid full name.", "error")
+                return redirect(url_for("signup"))
             try:
-                signin_data = firebase_sign_in(email=email, password=password)
+                signup_data = firebase_sign_up(email=email, password=password, full_name=full_name)
+                user = store.upsert_user_profile(
+                    user_id=signup_data["localId"],
+                    email=signup_data.get("email", email),
+                    full_name=full_name,
+                )
+                session["user_id"] = user["id"]
+                session.permanent = True
+                flash("Account created successfully.", "success")
+                return redirect(url_for("dashboard"))
             except (ValueError, RuntimeError) as exc:
                 flash(str(exc), "error")
-                return redirect(url_for("auth"))
+                return redirect(url_for("signup"))
 
-            user = store.upsert_user_profile(
-                user_id=signin_data["localId"],
-                email=signin_data.get("email", email),
-                full_name=signin_data.get("displayName", "").strip() or "User",
-            )
+        try:
+            signin_data = firebase_sign_in(email=email, password=password)
+        except (ValueError, RuntimeError) as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("signin"))
 
-            session["user_id"] = user["id"]
-            session.permanent = True
-            flash("Welcome back.", "success")
-            return redirect(url_for("dashboard"))
-
-        return render_template("auth.html")
+        user = store.upsert_user_profile(
+            user_id=signin_data["localId"],
+            email=signin_data.get("email", email),
+            full_name=signin_data.get("displayName", "").strip() or "User",
+        )
+        session["user_id"] = user["id"]
+        session.permanent = True
+        flash("Welcome back.", "success")
+        return redirect(url_for("dashboard"))
 
     @app.get("/logout")
     def logout():
@@ -252,21 +238,19 @@ def create_app() -> Flask:
         queue = scheduler.list_queue()
         stats = scheduler.history.completion_rate()
         in_progress = list(scheduler._in_progress.values())
-
         edges = scheduler.dag.all_edges()
-        nodes = []
-        for task in tasks:
-            nodes.append(
-                {
-                    "id": task.task_id,
-                    "label": f"{task.task_id}\\n{task.name[:18]}",
-                    "title": f"{task.name} | {task.department} | {status_label(task)}",
-                    "group": status_label(task),
-                }
-            )
 
-        critical_path = []
-        critical_duration = 0
+        nodes = [
+            {
+                "id": task.task_id,
+                "label": f"{task.task_id}\\n{task.name[:18]}",
+                "title": f"{task.name} | {task.department} | p{task.priority} | {status_label(task)}",
+                "group": status_label(task),
+            }
+            for task in tasks
+        ]
+
+        critical_path, critical_duration = [], 0
         if edges:
             try:
                 critical_path, critical_duration = scheduler.dag.critical_path()
@@ -294,7 +278,6 @@ def create_app() -> Flask:
     @login_required
     def create_task():
         scheduler, counter, _ = replay_scheduler(session["user_id"])
-
         name = request.form.get("name", "").strip()
         department = request.form.get("department", "Operations")
         priority = int(request.form.get("priority", 2))
@@ -325,12 +308,8 @@ def create_app() -> Flask:
 
         try:
             task = Task(
-                task_id=task_id,
-                name=name,
-                priority=priority,
-                deadline=deadline,
-                department=department,
-                estimated_duration=estimated_duration,
+                task_id=task_id, name=name, priority=priority, deadline=deadline,
+                department=department, estimated_duration=estimated_duration,
                 dependencies=dependencies,
             )
             scheduler.submit(task)
@@ -349,7 +328,6 @@ def create_app() -> Flask:
         if not task:
             flash("No ready tasks to start.", "error")
             return redirect(url_for("dashboard"))
-
         append_event(session["user_id"], "start_next", {"task_id": task.task_id})
         flash(f"Started {task.task_id}: {task.name}", "success")
         return redirect(url_for("dashboard"))

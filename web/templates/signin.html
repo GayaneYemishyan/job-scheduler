@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}FlowDesk — Sign In{% endblock %}
+{% block content %}
+
+<div class="auth-bg-glow"></div>
+
+<div class="page-centered">
+  <div class="auth-wrapper">
+
+    <div style="text-align:center;margin-bottom:2rem">
+      <a class="brand" href="{{ url_for('home') }}" style="justify-content:center;margin-bottom:0.75rem;display:flex">
+        <span class="brand-icon">FD</span>
+        FlowDesk
+      </a>
+      <p style="font-size:0.8rem;color:var(--muted);font-family:var(--font-mono)">Sign in to your workspace</p>
+    </div>
+
+    <div class="auth-card">
+      <h1>Welcome back</h1>
+      <p class="subtitle">Enter your credentials to continue.</p>
+
+      <form method="post" action="{{ url_for('auth') }}" class="form-stack">
+        <input type="hidden" name="mode" value="signin" />
+
+        <div class="form-group">
+          <label class="form-label">Email address</label>
+          <input type="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" name="password" placeholder="••••••••" required minlength="6" autocomplete="current-password" />
+        </div>
+
+        <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;padding:0.75rem;margin-top:0.5rem">
+          Sign In →
+        </button>
+      </form>
+    </div>
+
+    <p class="auth-switch">
+      Don't have an account?
+      <a href="{{ url_for('signup') }}">Create one →</a>
+    </p>
+
+  </div>
+</div>
+
+{% endblock %}

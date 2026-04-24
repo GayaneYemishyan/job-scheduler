@@ -1,170 +1,254 @@
 {% extends "base.html" %}
-{% block title %}FlowDesk | Dashboard{% endblock %}
+{% block title %}FlowDesk — Dashboard{% endblock %}
 {% block head %}
-<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 <script>
   window.schedulerNodes = {{ nodes | tojson }};
   window.schedulerEdges = {{ edges | tojson }};
+  window.criticalPath   = {{ critical_path | tojson }};
 </script>
 <script defer src="{{ url_for('static', filename='dashboard.js') }}"></script>
 {% endblock %}
 {% block content %}
-<section class="dashboard-header">
-  <div>
-    <p class="eyebrow">WELCOME</p>
-    <h1>{{ user.full_name }}'s Scheduler Console</h1>
-    <p>Manage execution, history, and dependency flow from one workspace.</p>
-  </div>
-  <div class="actions-inline">
-    <form method="post" action="{{ url_for('start_next') }}">
-      <button class="btn primary" type="submit">Start Next Task</button>
-    </form>
-    <form method="post" action="{{ url_for('rebalance') }}">
-      <button class="btn ghost" type="submit">Re-balance Queue</button>
-    </form>
-  </div>
-</section>
 
-<section class="stats-grid">
-  <article><h3>Total in DAG</h3><p>{{ tasks|length }}</p></article>
-  <article><h3>Queue Suggestions</h3><p>{{ queue|length }}</p></article>
-  <article><h3>Completed/Cancelled</h3><p>{{ stats.total }}</p></article>
-  <article><h3>Average Delay</h3><p>{% if avg_delay %}{{ '%.1f' % avg_delay }}h{% else %}On time{% endif %}</p></article>
-</section>
+<main>
 
-<section class="dashboard-grid">
-  <div class="panel">
-    <h2>Create New Task</h2>
-    <form method="post" action="{{ url_for('create_task') }}" class="task-form">
-      <label>Task Name</label>
-      <input name="name" required />
-
-      <label>Department</label>
-      <select name="department">
-        <option>Engineering</option>
-        <option>Design</option>
-        <option>Marketing</option>
-        <option>Operations</option>
-        <option>Finance</option>
-      </select>
-
-      <label>Priority</label>
-      <select name="priority">
-        <option value="1">Low</option>
-        <option value="2" selected>Medium</option>
-        <option value="3">High</option>
-        <option value="4">Critical</option>
-      </select>
-
-      <label>Estimated Duration (hours)</label>
-      <input type="number" step="0.5" min="0.5" name="estimated_duration" value="1.0" required />
-
-      <label>Deadline</label>
-      <input type="datetime-local" name="deadline" required />
-
-      <label>Dependencies</label>
-      <select name="dependencies" multiple size="5">
-        {% for task in tasks %}
-        <option value="{{ task.task_id }}">{{ task.task_id }} - {{ task.name }}</option>
-        {% endfor %}
-      </select>
-
-      <button class="btn primary" type="submit">Add Task</button>
-    </form>
+  <!-- ── Header ── -->
+  <div class="dashboard-header" style="margin-bottom:1.5rem">
+    <div>
+      <p class="eyebrow">Scheduler Console</p>
+      <h1>{{ user.full_name }}</h1>
+      <p>Priority-driven task orchestration with dependency resolution.</p>
+    </div>
+    <div class="actions-inline">
+      <form method="post" action="{{ url_for('start_next') }}" style="margin:0">
+        <button class="btn btn-primary" type="submit">▶ Start Next Task</button>
+      </form>
+      <form method="post" action="{{ url_for('rebalance') }}" style="margin:0">
+        <button class="btn btn-outline" type="submit">⟳ Re-balance Queue</button>
+      </form>
+    </div>
   </div>
 
-  <div class="panel">
-    <h2>System Suggestions</h2>
-    {% if queue %}
-      <ul class="list">
-        {% for task in queue %}
-          <li>
-            <strong>{{ task.task_id }}</strong> - {{ task.name }}
-            <span>{{ task.department }} | priority {{ task.priority }}</span>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p>No READY tasks right now.</p>
-    {% endif %}
-
-    <h2>In Progress</h2>
-    {% if in_progress %}
-      <ul class="list">
-        {% for task in in_progress %}
-          <li>
-            <strong>{{ task.task_id }}</strong> - {{ task.name }}
-            <form method="post" action="{{ url_for('complete_task', task_id=task.task_id) }}">
-              <button class="btn small" type="submit">Complete</button>
-            </form>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p>No running tasks.</p>
-    {% endif %}
-  </div>
-</section>
-
-<section class="panel">
-  <h2>Task Dependency Map</h2>
-  <div id="graph"></div>
-  {% if critical_path %}
-    <p class="caption">Critical path: {{ critical_path|join(' -> ') }} ({{ '%.1f' % critical_duration }}h)</p>
-  {% endif %}
-</section>
-
-<section class="dashboard-grid">
-  <div class="panel">
-    <h2>All Tasks</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th><th>Name</th><th>Status</th><th>Priority</th><th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for task in tasks %}
-        <tr>
-          <td>{{ task.task_id }}</td>
-          <td>{{ task.name }}</td>
-          <td>
-            {% if task.status.value in ['done', 'cancelled'] %}
-              {{ task.status.value }}
-            {% elif task.is_overdue() %}
-              delayed
-            {% else %}
-              {{ task.status.value }}
-            {% endif %}
-          </td>
-          <td>{{ task.priority }}</td>
-          <td>
-            {% if task.status.value not in ['done', 'cancelled'] %}
-            <form method="post" action="{{ url_for('cancel_task', task_id=task.task_id) }}">
-              <button class="btn small danger" type="submit">Cancel</button>
-            </form>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <!-- ── Stats ── -->
+  <div class="stats-row" style="margin-bottom:1.25rem">
+    <div class="stat-card">
+      <p class="stat-label">Tasks in DAG</p>
+      <p class="stat-value">{{ tasks|length }}</p>
+    </div>
+    <div class="stat-card">
+      <p class="stat-label">Ready in Queue</p>
+      <p class="stat-value teal">{{ queue|length }}</p>
+    </div>
+    <div class="stat-card">
+      <p class="stat-label">Completed</p>
+      <p class="stat-value">{{ stats.total }}</p>
+    </div>
+    <div class="stat-card">
+      <p class="stat-label">Avg Delay</p>
+      <p class="stat-value {% if avg_delay and avg_delay > 0 %}amber{% endif %}">
+        {% if avg_delay and avg_delay > 0 %}{{ '%.1f' % avg_delay }}h{% else %}—{% endif %}
+      </p>
+    </div>
   </div>
 
-  <div class="panel">
-    <h2>History</h2>
-    {% if history %}
-      <ul class="list">
-        {% for task in history %}
-          <li>
-            <strong>{{ task.task_id }}</strong> - {{ task.name }}
-            <span>{{ task.status.value }}{% if task.delay and task.delay > 0 %} | {{ '%.1f' % task.delay }}h late{% endif %}</span>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p>No completed or cancelled tasks yet.</p>
-    {% endif %}
+  <!-- ── Dependency Graph ── -->
+  <div class="panel" style="margin-bottom:1.25rem">
+    <p class="section-title">Dependency Graph</p>
+    <div id="graph"></div>
+    <div class="graph-footer">
+      <div class="graph-legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#5b9cf6"></span>Ready</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#5a6080"></span>Pending</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#f5a623"></span>In Progress</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#00d4aa"></span>Done</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#ff4d6a"></span>Cancelled</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#ff8c42"></span>Delayed</span>
+        {% if critical_path %}
+        <span class="legend-item" style="color:var(--amber)">
+          <span class="legend-dot" style="background:var(--amber);box-shadow:0 0 4px var(--amber)"></span>Critical Path
+        </span>
+        {% endif %}
+      </div>
+      {% if critical_path %}
+      <span class="critical-path-tag">
+        ⚡ {{ critical_path | join(' → ') }} &nbsp;·&nbsp; {{ '%.1f' % critical_duration }}h
+      </span>
+      {% endif %}
+    </div>
   </div>
-</section>
+
+  <!-- ── Create + Queue/In-Progress ── -->
+  <div class="page-grid" style="margin-bottom:1.25rem">
+
+    <!-- Create task -->
+    <div class="panel">
+      <p class="section-title">Create Task</p>
+      <form method="post" action="{{ url_for('create_task') }}" class="form-stack">
+
+        <div class="form-group">
+          <label class="form-label">Task Name</label>
+          <input name="name" placeholder="e.g. Build API endpoint" required />
+        </div>
+
+        <div class="page-grid" style="gap:0.75rem">
+          <div class="form-group">
+            <label class="form-label">Department</label>
+            <select name="department">
+              <option>Engineering</option>
+              <option>Design</option>
+              <option>Marketing</option>
+              <option>Operations</option>
+              <option>Finance</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Priority</label>
+            <select name="priority">
+              <option value="1">1 — Low</option>
+              <option value="2" selected>2 — Medium</option>
+              <option value="3">3 — High</option>
+              <option value="4">4 — Critical</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="page-grid" style="gap:0.75rem">
+          <div class="form-group">
+            <label class="form-label">Duration (h)</label>
+            <input type="number" step="0.5" min="0.5" name="estimated_duration" value="1.0" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Deadline</label>
+            <input type="datetime-local" name="deadline" required />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Dependencies</label>
+          <select name="dependencies" multiple>
+            {% for task in tasks %}
+            <option value="{{ task.task_id }}">{{ task.task_id }} — {{ task.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <button class="btn btn-primary" type="submit" style="margin-top:0.25rem">+ Add Task</button>
+      </form>
+    </div>
+
+    <!-- Queue + In progress -->
+    <div style="display:grid;gap:1.25rem;align-content:start">
+
+      <div class="panel">
+        <p class="section-title">Up Next</p>
+        {% if queue %}
+          <ul class="task-list">
+            {% for task in queue %}
+              <li class="task-list-item">
+                <span class="task-list-item-id">{{ task.task_id }}</span>
+                <span class="task-list-item-name">{{ task.name }}</span>
+                <span class="task-list-item-meta">{{ task.department }} · P{{ task.priority }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">No ready tasks in queue.</p>
+        {% endif %}
+      </div>
+
+      <div class="panel">
+        <p class="section-title">In Progress</p>
+        {% if in_progress %}
+          <ul class="task-list">
+            {% for task in in_progress %}
+              <li class="task-list-item">
+                <span class="task-list-item-id">{{ task.task_id }}</span>
+                <span class="task-list-item-name">{{ task.name }}</span>
+                <form method="post" action="{{ url_for('complete_task', task_id=task.task_id) }}" style="flex-shrink:0;margin:0">
+                  <button class="btn btn-primary btn-sm" type="submit">✓ Complete</button>
+                </form>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">No running tasks.</p>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── All tasks + History ── -->
+  <div class="page-grid">
+
+    <div class="panel">
+      <p class="section-title">All Tasks</p>
+      {% if tasks %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for task in tasks %}
+          <tr>
+            <td>{{ task.task_id }}</td>
+            <td style="color:var(--ink-2)">{{ task.name }}</td>
+            <td>
+              {% if task.status.value in ['done', 'cancelled'] %}
+                <span class="badge badge-{{ task.status.value }}">{{ task.status.value }}</span>
+              {% elif task.is_overdue() %}
+                <span class="badge badge-delayed">delayed</span>
+              {% else %}
+                <span class="badge badge-{{ task.status.value }}">{{ task.status.value | replace('_',' ') }}</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--teal);font-weight:700;font-family:var(--font-mono)">{{ task.priority }}</td>
+            <td>
+              {% if task.status.value not in ['done', 'cancelled'] %}
+              <form method="post" action="{{ url_for('cancel_task', task_id=task.task_id) }}" style="margin:0">
+                <button class="btn btn-danger btn-sm" type="submit">Cancel</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <p class="empty">No tasks yet. Create one above.</p>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <p class="section-title">Execution History</p>
+      {% if history %}
+        <ul class="task-list">
+          {% for task in history %}
+            <li class="task-list-item">
+              <span class="task-list-item-id">{{ task.task_id }}</span>
+              <span class="task-list-item-name">{{ task.name }}</span>
+              <span style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0">
+                <span class="badge badge-{{ task.status.value }}">{{ task.status.value }}</span>
+                {% if task.delay and task.delay > 0 %}
+                  <span style="font-size:0.68rem;color:var(--red);font-family:var(--font-mono)">+{{ '%.1f' % task.delay }}h</span>
+                {% endif %}
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="empty">No completed or cancelled tasks yet.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+</main>
+
 {% endblock %}

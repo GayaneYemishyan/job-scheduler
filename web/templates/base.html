@@ -6,35 +6,42 @@
     <title>{% block title %}FlowDesk{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
     {% block head %}{% endblock %}
   </head>
   <body>
+
     <header class="topbar">
-      <a class="brand" href="{{ url_for('home') }}">FlowDesk</a>
-      <nav>
+      <a class="brand" href="{{ url_for('home') }}">
+        <span class="brand-icon">FD</span>
+        FlowDesk
+      </a>
+      <nav class="topbar-nav">
         {% if session.get('user_id') %}
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
-          <a href="{{ url_for('logout') }}">Logout</a>
+          <a href="{{ url_for('logout') }}">Sign out</a>
         {% else %}
-          <a href="{{ url_for('auth') }}">Sign In</a>
+          <a href="{{ url_for('signin') }}">Sign in</a>
+          <a href="{{ url_for('signup') }}" style="color:var(--teal)">Sign up</a>
         {% endif %}
       </nav>
     </header>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <section class="flash-stack">
+        <div class="flash-stack">
           {% for category, message in messages %}
-            <div class="flash {{ category }}">{{ message }}</div>
+            <div class="flash {{ category }}">
+              {% if category == 'success' %}✓{% else %}✕{% endif %}
+              {{ message }}
+            </div>
           {% endfor %}
-        </section>
+        </div>
       {% endif %}
     {% endwith %}
 
-    <main>
-      {% block content %}{% endblock %}
-    </main>
+    {% block content %}{% endblock %}
+
   </body>
 </html>

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}FlowDesk — Create Account{% endblock %}
+{% block content %}
+
+<div class="auth-bg-glow"></div>
+
+<div class="page-centered">
+  <div class="auth-wrapper">
+
+    <div style="text-align:center;margin-bottom:2rem">
+      <a class="brand" href="{{ url_for('home') }}" style="justify-content:center;margin-bottom:0.75rem;display:flex">
+        <span class="brand-icon">FD</span>
+        FlowDesk
+      </a>
+      <p style="font-size:0.8rem;color:var(--muted);font-family:var(--font-mono)">Create your free workspace</p>
+    </div>
+
+    <div class="auth-card">
+      <h1>Get started</h1>
+      <p class="subtitle">Set up your account in seconds.</p>
+
+      <form method="post" action="{{ url_for('auth') }}" class="form-stack">
+        <input type="hidden" name="mode" value="signup" />
+
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" name="full_name" placeholder="Your name" required minlength="2" autocomplete="name" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email address</label>
+          <input type="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" name="password" placeholder="Min. 6 characters" required minlength="6" autocomplete="new-password" />
+        </div>
+
+        <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;padding:0.75rem;margin-top:0.5rem">
+          Create Account →
+        </button>
+      </form>
+    </div>
+
+    <p class="auth-switch">
+      Already have an account?
+      <a href="{{ url_for('signin') }}">Sign in →</a>
+    </p>
+
+  </div>
+</div>
+
+{% endblock %}
