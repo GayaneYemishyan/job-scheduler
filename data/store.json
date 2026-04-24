@@ -1,0 +1,57 @@
+{
+  "users": {
+    "EyHz1Lghs6bLBtw3IvXvIAwnpY52": {
+      "id": "EyHz1Lghs6bLBtw3IvXvIAwnpY52",
+      "email": "gayane.yemiahyan@gmail.com",
+      "full_name": "Gayane Yemishyan",
+      "created_at": "2026-04-24T16:47:34.329437",
+      "updated_at": "2026-04-24T16:51:39.104767"
+    }
+  },
+  "events": {
+    "EyHz1Lghs6bLBtw3IvXvIAwnpY52": [
+      {
+        "type": "submit",
+        "data": {
+          "task": {
+            "task_id": "T0001",
+            "name": "Complete Jo scheduler",
+            "priority": 3,
+            "deadline": "2026-04-27T23:59:00",
+            "department": "Engineering",
+            "estimated_duration": 1.0,
+            "dependencies": []
+          }
+        },
+        "timestamp": "2026-04-24T16:49:58.580824"
+      },
+      {
+        "type": "cancel",
+        "data": {
+          "task_id": "T0001"
+        },
+        "timestamp": "2026-04-24T16:50:42.629212"
+      },
+      {
+        "type": "rebalance",
+        "data": {},
+        "timestamp": "2026-04-24T16:51:07.164053"
+      },
+      {
+        "type": "rebalance",
+        "data": {},
+        "timestamp": "2026-04-24T16:52:06.652767"
+      },
+      {
+        "type": "rebalance",
+        "data": {},
+        "timestamp": "2026-04-24T16:52:07.700132"
+      },
+      {
+        "type": "rebalance",
+        "data": {},
+        "timestamp": "2026-04-24T16:54:21.059077"
+      }
+    ]
+  }
+}

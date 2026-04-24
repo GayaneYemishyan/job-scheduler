@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}FlowDesk | Sign In{% endblock %}
+{% block content %}
+<section class="auth-grid">
+  <div class="panel">
+    <h2>Sign In</h2>
+    <form method="post" action="{{ url_for('auth') }}" class="stack">
+      <input type="hidden" name="mode" value="signin" />
+      <label>Email</label>
+      <input type="email" name="email" required />
+      <label>Password</label>
+      <input type="password" name="password" required minlength="6" />
+      <button class="btn primary" type="submit">Continue</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>Create Account</h2>
+    <form method="post" action="{{ url_for('auth') }}" class="stack">
+      <input type="hidden" name="mode" value="signup" />
+      <label>Full Name</label>
+      <input type="text" name="full_name" required minlength="2" />
+      <label>Email</label>
+      <input type="email" name="email" required />
+      <label>Password</label>
+      <input type="password" name="password" required minlength="6" />
+      <button class="btn ghost" type="submit">Create account</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

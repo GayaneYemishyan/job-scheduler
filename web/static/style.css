@@ -1,0 +1,275 @@
+:root {
+  --bg: #f2f1ea;
+  --panel: #fffdfa;
+  --ink: #111111;
+  --muted: #67645d;
+  --line: #ddd8cf;
+  --teal: #006d77;
+  --amber: #e2952d;
+  --red: #b02a37;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: radial-gradient(circle at 12% 5%, #dfece2 0%, transparent 25%),
+    radial-gradient(circle at 85% 12%, #f7dfbd 0%, transparent 35%),
+    var(--bg);
+  font-family: "Space Grotesk", sans-serif;
+}
+
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Fraunces", serif;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+
+.topbar a {
+  text-decoration: none;
+  color: var(--ink);
+  margin-left: 1rem;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.hero-text,
+.hero-card,
+.panel,
+.stats-grid article {
+  background: color-mix(in srgb, var(--panel) 88%, #fff 12%);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 1rem 1.2rem;
+}
+
+.hero-text h1 {
+  margin: 0.4rem 0;
+  font-size: clamp(1.8rem, 3vw, 3.2rem);
+  line-height: 1.05;
+}
+
+.highlights {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.highlights article {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.auth-grid,
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+}
+
+.stats-grid {
+  margin-top: 1rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stats-grid p {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.eyebrow {
+  letter-spacing: 0.12em;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.actions-inline {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.btn {
+  border-radius: 11px;
+  border: 1px solid transparent;
+  padding: 0.55rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.btn.primary {
+  background: var(--teal);
+  color: #fff;
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.btn.danger {
+  background: var(--red);
+  color: #fff;
+}
+
+.btn.small {
+  padding: 0.32rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.task-form,
+.stack {
+  display: grid;
+  gap: 0.5rem;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select {
+  padding: 0.5rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.list li {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.6rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.list span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+#graph {
+  width: 100%;
+  height: 340px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.caption {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.flash-stack {
+  max-width: 1200px;
+  margin: 0.8rem auto 0;
+  padding: 0 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.flash {
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+}
+
+.flash.success {
+  background: #d8f3e4;
+  color: #0f5132;
+}
+
+.flash.error {
+  background: #fde2e4;
+  color: #842029;
+}
+
+@media (max-width: 960px) {
+  .hero,
+  .auth-grid,
+  .dashboard-grid,
+  .stats-grid,
+  .highlights {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    align-items: start;
+  }
+}

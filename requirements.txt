@@ -1,1 +1,7 @@
 pytest
+flask
+flask-cors
+plotly
+streamlit
+firebase-admin
+python-dotenv

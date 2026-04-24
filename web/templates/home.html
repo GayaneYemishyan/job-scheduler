@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}FlowDesk | Smart Job Scheduler{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="hero-text">
+    <p class="eyebrow">INTELLIGENT ORCHESTRATION</p>
+    <h1>Schedule tasks with dependency-aware precision.</h1>
+    <p>
+      FlowDesk turns your DSA scheduler into a practical control center. Manage tasks,
+      resolve DAG dependencies, prioritize by impact, and track execution outcomes with a
+      production-style workflow dashboard.
+    </p>
+    <div class="hero-actions">
+      <a class="btn primary" href="{{ url_for('auth') }}">Sign In</a>
+      <a class="btn ghost" href="{{ url_for('auth') }}">Sign Up</a>
+    </div>
+  </div>
+  <div class="hero-card">
+    <h3>What you get</h3>
+    <ul>
+      <li>Priority queue driven execution</li>
+      <li>DAG-based dependency safety</li>
+      <li>Ready, in-progress, completed, cancelled tracking</li>
+      <li>System suggestion for next best task</li>
+      <li>Interactive task graph visualization</li>
+    </ul>
+  </div>
+</section>
+
+<section class="highlights">
+  <article>
+    <h3>Smart Suggestions</h3>
+    <p>Your scheduler continuously recommends what to start next based on effective priority and readiness.</p>
+  </article>
+  <article>
+    <h3>Dependency Intelligence</h3>
+    <p>Visualize prerequisite chains and critical path candidates before execution bottlenecks occur.</p>
+  </article>
+  <article>
+    <h3>History and Metrics</h3>
+    <p>Review done, delayed, and cancelled tasks to improve planning quality over time.</p>
+  </article>
+</section>
+{% endblock %}
