@@ -51,6 +51,7 @@ class Task:
         estimated_duration: float          = None,
         dependencies:       list           = None,
         priority_level:     PriorityLevel  = PriorityLevel.MEDIUM,
+        description:        str | None     = None,
     ):
         # --- Identity ---
         self.task_id    = task_id
@@ -65,7 +66,7 @@ class Task:
         self.deadline           = deadline
         self.estimated_duration = estimated_duration   # hours; None → 1.0 in DAG
         self.dependencies       = list(dependencies) if dependencies else []
-
+        self.description = description
         # --- Assignment ---
         self.department = department
         self.assigned_to = assigned_to
