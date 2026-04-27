@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask_cors import CORS
 
 from api.scheduler import Scheduler
 from core.models import Status, Task
@@ -22,6 +23,7 @@ from web.api_routes import register_api_routes
 
 def create_app() -> Flask:
     app = Flask(__name__, template_folder="templates", static_folder="static")
+    CORS(app, origins=["https://job-scheduler-kappa.vercel.app", "http://localhost:3000"], supports_credentials=True, allow_headers=["Content-Type"])
     app.config["SECRET_KEY"] = os.getenv(
         "SECRET_KEY",
         "replace-this-secret-before-production",
