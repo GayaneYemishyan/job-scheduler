@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import os
 import sys
-from urllib import error, request as urllib_request
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
@@ -39,58 +37,6 @@ def create_app() -> Flask:
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
 
     store = build_store()
-    firebase_api_key = os.getenv("FIREBASE_API_KEY", "").strip()
-
-
-    def firebase_auth_enabled() -> bool:
-        return bool(firebase_api_key)
-
-    def firebase_request(endpoint: str, payload: dict) -> dict:
-        if not firebase_api_key:
-            raise RuntimeError(
-                "Missing FIREBASE_API_KEY. Configure it to enable Firebase Auth."
-            )
-        url = (
-            f"https://identitytoolkit.googleapis.com/v1/{endpoint}"
-            f"?key={firebase_api_key}"
-        )
-        body = json.dumps(payload).encode("utf-8")
-        req = urllib_request.Request(
-            url,
-            data=body,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib_request.urlopen(req, timeout=15) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except error.HTTPError as exc:
-            details = exc.read().decode("utf-8")
-            try:
-                parsed = json.loads(details)
-                message = parsed.get("error", {}).get("message", "Authentication failed.")
-            except Exception:
-                message = "Authentication failed."
-            raise ValueError(message) from exc
-
-    def firebase_sign_up(email: str, password: str, full_name: str) -> dict:
-        data = firebase_request(
-            "accounts:signUp",
-            {"email": email, "password": password, "returnSecureToken": True},
-        )
-        id_token = data.get("idToken")
-        if id_token:
-            firebase_request(
-                "accounts:update",
-                {"idToken": id_token, "displayName": full_name, "returnSecureToken": False},
-            )
-        return data
-
-    def firebase_sign_in(email: str, password: str) -> dict:
-        return firebase_request(
-            "accounts:signInWithPassword",
-            {"email": email, "password": password, "returnSecureToken": True},
-        )
 
     def login_required(fn):
         @wraps(fn)
@@ -221,56 +167,6 @@ def create_app() -> Flask:
         if session.get("user_id"):
             return redirect(url_for("dashboard"))
         return render_template("signup.html")
-
-    # Single POST handler for both modes (forms still POST to /auth)
-    @app.route("/auth", methods=["GET", "POST"])
-    def auth():
-        if request.method == "GET":
-            return redirect(url_for("signin"))
-
-        if not firebase_auth_enabled():
-            flash("Firebase Auth is not configured. Set FIREBASE_API_KEY first.", "error")
-            return redirect(url_for("signin"))
-
-        mode = request.form.get("mode", "signin")
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
-
-        if mode == "signup":
-            full_name = request.form.get("full_name", "").strip()
-            if len(full_name) < 2:
-                flash("Please enter a valid full name.", "error")
-                return redirect(url_for("signup"))
-            try:
-                signup_data = firebase_sign_up(email=email, password=password, full_name=full_name)
-                user = store.upsert_user_profile(
-                    user_id=signup_data["localId"],
-                    email=signup_data.get("email", email),
-                    full_name=full_name,
-                )
-                session["user_id"] = user["id"]
-                session.permanent = True
-                flash("Account created successfully.", "success")
-                return redirect(url_for("dashboard"))
-            except (ValueError, RuntimeError) as exc:
-                flash(str(exc), "error")
-                return redirect(url_for("signup"))
-
-        try:
-            signin_data = firebase_sign_in(email=email, password=password)
-        except (ValueError, RuntimeError) as exc:
-            flash(str(exc), "error")
-            return redirect(url_for("signin"))
-
-        user = store.upsert_user_profile(
-            user_id=signin_data["localId"],
-            email=signin_data.get("email", email),
-            full_name=signin_data.get("displayName", "").strip() or "User",
-        )
-        session["user_id"] = user["id"]
-        session.permanent = True
-        flash("Welcome back.", "success")
-        return redirect(url_for("dashboard"))
 
     @app.get("/logout")
     def logout():
