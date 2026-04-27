@@ -17,6 +17,7 @@ from flask import Flask, flash, redirect, render_template, request, session, url
 from api.scheduler import Scheduler
 from core.models import Status, Task
 from web.storage import build_store
+from web.api_routes import register_api_routes
 
 
 def create_app() -> Flask:
@@ -138,11 +139,36 @@ def create_app() -> Flask:
                 task_id = data.get("task_id")
                 payload = data.get("updates", {})
                 if task_id and task_id in scheduler.dag.tasks:
-                    if "deadline" in payload:
-                        payload["deadline"] = datetime.fromisoformat(payload["deadline"])
+                    task = scheduler.dag.tasks[task_id]
                     try:
-                        scheduler.update_task(task_id, **payload)
-                    except Exception:
+                        # Update task properties directly
+                        if "name" in payload:
+                            task.name = payload["name"]
+                        if "department" in payload:
+                            task.department = payload["department"]
+                        if "priority" in payload:
+                            task.priority = int(payload["priority"])
+                            task.base_priority = int(payload["priority"])
+                        if "estimated_duration" in payload:
+                            task.estimated_duration = float(payload["estimated_duration"])
+                        if "description" in payload:
+                            task.description = payload["description"]
+                        if "assigned_to" in payload:
+                            task.assigned_to = payload["assigned_to"]
+                        if "deadline" in payload:
+                            task.deadline = datetime.fromisoformat(payload["deadline"])
+                        if "status" in payload:
+                            status_map = {
+                                "pending": Status.PENDING,
+                                "ready": Status.READY,
+                                "in_progress": Status.IN_PROGRESS,
+                                "done": Status.DONE,
+                                "delayed": Status.DELAYED,
+                                "cancelled": Status.CANCELLED,
+                            }
+                            if payload["status"] in status_map:
+                                task.status = status_map[payload["status"]]
+                    except Exception as e:
                         continue
 
             elif etype == "rebalance":
@@ -155,6 +181,8 @@ def create_app() -> Flask:
             user_id,
             {"type": event_type, "data": data, "timestamp": datetime.utcnow().isoformat()},
         )
+
+    register_api_routes(app, store, replay_scheduler, login_required, append_event)
 
     def status_label(task: Task) -> str:
         if task.status in (Status.DONE, Status.CANCELLED):
@@ -258,7 +286,7 @@ def create_app() -> Flask:
                 "title": f"{task.name} | {task.department} | p{task.priority} | {status_label(task)}",
                 "group": status_label(task),
             }
-            for task in tasks if status_label(task) not in ("cancelled", "pending")
+            for task in tasks if status_label(task) not in ("cancelled",)
         ]
 
         # Filter edges to only include those between non-cancelled/non-pending tasks
@@ -297,6 +325,8 @@ def create_app() -> Flask:
     def create_task():
         scheduler, counter, _ = replay_scheduler(session["user_id"])
         name = request.form.get("name", "").strip()
+        description = request.form.get("description", "").strip()
+        assigned_to = request.form.get("assigned_to", "").strip() or None
         department = request.form.get("department")
         custom_dept = request.form.get("custom_department", "").strip()
         
@@ -329,13 +359,21 @@ def create_app() -> Flask:
             "department": department,
             "estimated_duration": estimated_duration,
             "dependencies": dependencies,
+            "description": description,
+            "assigned_to": assigned_to,
         }
 
         try:
             task = Task(
-                task_id=task_id, name=name, priority=priority, deadline=deadline,
-                department=department, estimated_duration=estimated_duration,
+                task_id=task_id,
+                name=name,
+                priority=priority,
+                deadline=deadline,
+                department=department,
+                estimated_duration=estimated_duration,
                 dependencies=dependencies,
+                description=description,
+                assigned_to=assigned_to,
             )
             scheduler.submit(task)
             append_event(session["user_id"], "submit", {"task": task_payload})
@@ -381,6 +419,44 @@ def create_app() -> Flask:
             flash(str(exc), "error")
         return redirect(url_for("dashboard"))
 
+    @app.post("/tasks/<task_id>/status/<new_status>")
+    @login_required
+    def change_task_status(task_id: str, new_status: str):
+        """Quick status change endpoint."""
+        scheduler, _, _ = replay_scheduler(session["user_id"])
+        
+        if task_id not in scheduler.dag.tasks:
+            flash(f"Task {task_id} not found.", "error")
+            return redirect(url_for("dashboard"))
+        
+        task = scheduler.dag.tasks[task_id]
+        
+        # Map new_status string to Status enum
+        status_map = {
+            "pending": Status.PENDING,
+            "ready": Status.READY,
+            "in_progress": Status.IN_PROGRESS,
+            "done": Status.DONE,
+            "delayed": Status.DELAYED,
+            "cancelled": Status.CANCELLED,
+        }
+        
+        if new_status not in status_map:
+            flash(f"Invalid status '{new_status}'.", "error")
+            return redirect(url_for("dashboard"))
+        
+        try:
+            task.status = status_map[new_status]
+            append_event(session["user_id"], "update", {
+                "task_id": task_id,
+                "updates": {"status": new_status}
+            })
+            flash(f"Changed {task_id} to {new_status}.", "success")
+        except Exception as exc:
+            flash(str(exc), "error")
+        
+        return redirect(url_for("dashboard"))
+
     @app.post("/tasks/rebalance")
     @login_required
     def rebalance():
@@ -414,6 +490,9 @@ def create_app() -> Flask:
             return redirect(url_for("dashboard"))
 
         name = request.form.get("name", "").strip()
+        description = request.form.get("description", "").strip()
+        assigned_to = request.form.get("assigned_to", "").strip() or None
+        status_str = request.form.get("status", "").strip()
         department = request.form.get("department")
         custom_dept = request.form.get("custom_department", "").strip()
         if department == "Other" and custom_dept:
@@ -429,22 +508,47 @@ def create_app() -> Flask:
             flash("Invalid deadline date.", "error")
             return redirect(url_for("edit_task_page", task_id=task_id))
 
+        task = scheduler.dag.tasks[task_id]
+        
+        # Update task properties directly
+        task.name = name
+        task.department = department
+        task.priority = priority
+        task.base_priority = priority
+        task.deadline = deadline
+        task.estimated_duration = estimated_duration
+        task.description = description
+        task.assigned_to = assigned_to
+        
+        # Handle status change
+        if status_str:
+            status_map = {
+                "pending": Status.PENDING,
+                "ready": Status.READY,
+                "in_progress": Status.IN_PROGRESS,
+                "done": Status.DONE,
+                "delayed": Status.DELAYED,
+                "cancelled": Status.CANCELLED,
+            }
+            if status_str in status_map:
+                task.status = status_map[status_str]
+        
         updates = {
             "name": name,
             "department": department,
             "priority": priority,
             "estimated_duration": estimated_duration,
-            "deadline": deadline.isoformat()
+            "deadline": deadline.isoformat(),
+            "description": description,
+            "assigned_to": assigned_to,
         }
-
-        try:
-            # Replay friendly update
-            scheduler.update_task(task_id, **{**updates, "deadline": deadline})
-            append_event(session["user_id"], "update", {"task_id": task_id, "updates": updates})
-            flash(f"Task {task_id} updated.", "success")
-        except Exception as exc:
-            flash(str(exc), "error")
-
-        return redirect(url_for("dashboard"))
+        if status_str:
+            updates["status"] = status_str
+        
+        append_event(session["user_id"], "update", {"task_id": task_id, "updates": updates})
+        
+        # Return success JSON response for API call
+        from flask import jsonify
+        return jsonify({"success": True, "message": f"Task {task_id} updated successfully"})
 
     return app
