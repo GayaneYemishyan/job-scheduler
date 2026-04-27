@@ -1,7 +1,8 @@
 import type { DashboardData, User, TaskStatus } from '@/types';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE}${url}`, {
     ...options,
     credentials: 'include',
     headers: {
@@ -127,7 +128,6 @@ export async function signUp(
   formData.append('email', email);
   formData.append('password', password);
   formData.append('full_name', fullName);
-
   const res = await fetchWithAuth('/auth', {
     method: 'POST',
     body: formData,
