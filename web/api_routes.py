@@ -4,7 +4,9 @@ Add these routes to your Flask app by importing and calling register_api_routes(
 """
 
 from flask import jsonify, session, request
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
+import jwt as pyjwt
 from core.models import Status
 
 
@@ -46,9 +48,9 @@ def register_api_routes(app, store, replay_scheduler, login_required, append_eve
 
     @app.get("/api/me")
     def api_me():
-        if "user_id" not in session:
+        if not getattr(request, "current_user_id", None):
             return jsonify({"error": "Not authenticated"}), 401
-        user = store.get_user(session["user_id"])
+        user = store.get_user(request.current_user_id)
         if not user:
             return jsonify({"error": "User not found"}), 404
         return jsonify({
@@ -60,8 +62,8 @@ def register_api_routes(app, store, replay_scheduler, login_required, append_eve
     @app.get("/dashboard-data")
     @login_required
     def dashboard_data():
-        user = store.get_user(session["user_id"])
-        scheduler, counter, running_task_id = replay_scheduler(session["user_id"])
+        user = store.get_user(request.current_user_id)
+        scheduler, counter, running_task_id = replay_scheduler(request.current_user_id)
 
         tasks = scheduler.dag.all_tasks()
         history = scheduler.history.all_records()
@@ -175,10 +177,19 @@ def register_api_routes(app, store, replay_scheduler, login_required, append_eve
                 )
                 session["user_id"] = user["id"]
                 session.permanent = True
+                token = pyjwt.encode(
+                    {
+                        "user_id": user["id"],
+                        "exp": datetime.utcnow() + timedelta(hours=12),
+                    },
+                    os.getenv("SECRET_KEY", "replace-this-secret-before-production"),
+                    algorithm="HS256",
+                )
                 return jsonify({
                     "id": user["id"],
                     "email": user["email"],
                     "full_name": user.get("full_name", ""),
+                    "token": token,
                 })
             except (ValueError, RuntimeError) as exc:
                 return jsonify({"error": str(exc)}), 400
@@ -198,8 +209,17 @@ def register_api_routes(app, store, replay_scheduler, login_required, append_eve
         )
         session["user_id"] = user["id"]
         session.permanent = True
+        token = pyjwt.encode(
+            {
+                "user_id": user["id"],
+                "exp": datetime.utcnow() + timedelta(hours=12),
+            },
+            os.getenv("SECRET_KEY", "replace-this-secret-before-production"),
+            algorithm="HS256",
+        )
         return jsonify({
             "id": user["id"],
             "email": user["email"],
             "full_name": user.get("full_name", ""),
+            "token": token,
         })

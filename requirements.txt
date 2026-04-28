@@ -6,3 +6,4 @@ streamlit
 firebase-admin
 python-dotenv
 gunicorn
+PyJWT

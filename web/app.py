@@ -101,17 +101,32 @@ def create_app() -> Flask:
     def login_required(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            if "user_id" not in session:
-                # Check if this is an API/fetch request
-                if (
-                    request.path.startswith('/api') or
-                    request.path == '/dashboard-data' or
-                    request.headers.get('Accept', '').startswith('application/json')
-                ):
+            # Check JWT token in Authorization header first
+            auth_header = request.headers.get('Authorization', '')
+            if auth_header.startswith('Bearer '):
+                token = auth_header[7:]
+                try:
+                    import jwt
+                    payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+                    request.current_user_id = payload['user_id']
+                    return fn(*args, **kwargs)
+                except Exception:
                     from flask import jsonify
-                    return jsonify({"error": "Not authenticated"}), 401
-                return redirect(url_for("signin"))
-            return fn(*args, **kwargs)
+                    return jsonify({"error": "Invalid or expired token"}), 401
+
+            # Fall back to session cookie
+            if "user_id" in session:
+                request.current_user_id = session["user_id"]
+                return fn(*args, **kwargs)
+
+            if (
+                request.path.startswith('/api') or
+                request.path == '/dashboard-data' or
+                request.headers.get('Accept', '').startswith('application/json')
+            ):
+                from flask import jsonify
+                return jsonify({"error": "Not authenticated"}), 401
+            return redirect(url_for("signin"))
         return wrapper
 
     def replay_scheduler(user_id: str) -> tuple[Scheduler, int, str | None]:
