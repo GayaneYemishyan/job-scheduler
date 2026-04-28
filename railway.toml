@@ -1,5 +1,5 @@
 [build]
-builder = "nixpacks"
+buildCommand = ""
 
 [deploy]
 startCommand = "gunicorn main:app --timeout 120 --log-level debug --capture-output"
