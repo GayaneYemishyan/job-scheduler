@@ -106,8 +106,6 @@ FIREBASE_CREDENTIALS=
 python main.py
 ```
 
-Open [http://localhost:5000](http://localhost:5000).
-
 ### 4. Run tests
 
 ```bash
