@@ -102,6 +102,14 @@ def create_app() -> Flask:
         @wraps(fn)
         def wrapper(*args, **kwargs):
             if "user_id" not in session:
+                # Check if this is an API/fetch request
+                if (
+                    request.path.startswith('/api') or
+                    request.path == '/dashboard-data' or
+                    request.headers.get('Accept', '').startswith('application/json')
+                ):
+                    from flask import jsonify
+                    return jsonify({"error": "Not authenticated"}), 401
                 return redirect(url_for("signin"))
             return fn(*args, **kwargs)
         return wrapper
