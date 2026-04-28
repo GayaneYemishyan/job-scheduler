@@ -38,6 +38,12 @@ def create_app() -> Flask:
     )
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
 
+    # Ensure cookies work across different domains (e.g., frontend on Vercel)
+    # SameSite=None and Secure=True required for cross-site cookie usage.
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "None"
+    app.config["SESSION_COOKIE_DOMAIN"] = None
+
     store = build_store()
     firebase_api_key = os.getenv("FIREBASE_API_KEY", "").strip()
 
