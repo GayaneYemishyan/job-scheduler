@@ -81,12 +81,19 @@ class FirebaseStore:
         except Exception as exc:
             raise RuntimeError("firebase-admin is not installed.") from exc
 
-        credentials_path = os.getenv("FIREBASE_CREDENTIALS")
-        if not credentials_path:
+        credentials_value = os.getenv("FIREBASE_CREDENTIALS")
+        if not credentials_value:
             raise RuntimeError("FIREBASE_CREDENTIALS is not set.")
 
         if not firebase_admin._apps:
-            cred = credentials.Certificate(credentials_path)
+            # Try parsing as JSON string first, then fall back to file path
+            try:
+                import json as _json
+
+                cred_dict = _json.loads(credentials_value)
+                cred = credentials.Certificate(cred_dict)
+            except (_json.JSONDecodeError, ValueError):
+                cred = credentials.Certificate(credentials_value)
             firebase_admin.initialize_app(cred)
 
         self.db = firestore.client()
