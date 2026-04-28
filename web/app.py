@@ -23,15 +23,16 @@ from flask_cors import CORS
 def create_app() -> Flask:
     app = Flask(__name__, template_folder="templates", static_folder="static")
     
-    CORS(app, 
-     origins=[
-         "https://job-scheduler-kappa.vercel.app",
-         "https://job-scheduler-production-3724.up.railway.app",
-         "http://localhost:3000",
-     ], 
-     supports_credentials=True, 
-     allow_headers=["Content-Type"]
-)
+    CORS(app,
+        origins=[
+            "https://job-scheduler-kappa.vercel.app",
+            "https://job-scheduler-production-3724.up.railway.app",
+            "http://localhost:3000",
+        ],
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    )
     app.config["SECRET_KEY"] = os.getenv(
         "SECRET_KEY",
         "replace-this-secret-before-production",
