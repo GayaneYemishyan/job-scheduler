@@ -10,8 +10,10 @@ class LocalJSONStore:
     """Simple local persistence for users and scheduler events."""
 
     def __init__(self, file_path: str | None = None):
-        default_path = Path(__file__).resolve().parent.parent / "data" / "store.json"
-        self.file_path = Path(file_path) if file_path else default_path
+        default_path = os.getenv("STORE_PATH") or str(
+        Path(__file__).resolve().parent.parent / "data" / "store.json"
+        )
+        self.file_path = Path(file_path) if file_path else Path(default_path)
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         if not self.file_path.exists():
